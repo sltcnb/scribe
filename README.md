@@ -1,86 +1,53 @@
-# Scribe — Report Engine
+# Scribe
 
-> Turn a case into a shareable artifact for any audience.
+Report engine for the [Citadel](https://github.com/sltcnb/citadel) pipeline. Turns a case timeline, its findings and its evidence into a document someone will actually read.
 
-**Status: active** — the rendering engine lives HERE (`scribe/render.py`), pip-installed
-into the API image. `api/routers/reports.py` only gathers case data (ES/Redis) and calls
-`render_markdown` / `render_html`. No duplicate rendering code in the API.
-
-```python
-from scribe import render_markdown, render_html, merge_template, TEMPLATE_DEFAULTS
-```
-
-## Pipeline position
-
-```
-case (timeline · detections · findings · notes) ──▶ Scribe ──▶ HTML / PDF / Markdown / DOCX
-```
-
-- **Inputs** — a Citadel case: gathered ES/Redis data (events, detections, CTI hits, flagged/pinned items, notes, AI report).
-- **Outputs** — a shareable report (`artifact_type: report`) — graphical HTML (print-to-PDF), Markdown, DOCX; STIX/MISP/JSON planned.
-- **Dependencies** — Elasticsearch.
-
-## Contracts
-
-| Direction | Contract | Schema |
-|---|---|---|
-| Consumes | a Citadel case (`application/json`) built from ForensicEvent v1 data | `https://citadel.dfir/contracts/forensic_event/v1.json` |
-| Produces | `artifact_type: report` (documents — no event schema; `produces.schema: []`) | — |
-
-Contracts are versioned in the [citadel-contracts](https://github.com/sltcnb/citadel-contracts)
-repo (Python package `citadel_contracts`).
+The same case has to be explained to different people. Scribe renders one case into Markdown, graphical HTML or DOCX, so the technical appendix and the summary a client sees come from the same source of truth instead of being retyped.
 
 ## Install
 
-Normally pip-installed into the Citadel API image. Standalone clone:
-
 ```bash
-git clone https://github.com/sltcnb/scribe && cd scribe
-pip install -e .          # zero runtime dependencies (stdlib only)
+pip install git+https://github.com/sltcnb/scribe
 ```
 
-## Configuration
+Python 3.11 or newer.
 
-No environment variables — verified: no `os.environ`/`getenv` in the package.
-The engine is pure functions: everything is passed by the caller — case data as
-arguments, branding/section toggles via `merge_template` over `TEMPLATE_DEFAULTS`,
-and the optional proofread LLM as an injected `llm_call(system, user)` callable
-(Scribe itself does no I/O and holds no credentials).
+## Rendering
 
-## Run / health
+```python
+from scribe.render import merge_template
+from scribe.document import Document
 
-`api/routers/reports.py` gathers case data and calls the engine; `scribe --version` is the health check (from `brick.yaml`). The standalone multi-format CLI is in progress (see capabilities below).
+doc = merge_template(template, case_data)
+```
+
+| Module | Role |
+|---|---|
+| `render.py` | Template merge, event and aggregate tables, timestamp formatting |
+| `document.py` | Document model the renderers share |
+| `docx_render.py` | Word output |
+| `labels.py` | Human-readable names for fields and artifact types |
+
+## Templates
+
+A template is merged with case data rather than assembled in code, so changing the wording of a report does not mean changing Python. Event tables, aggregate rows and timestamps are formatted by `render.py`, which keeps the same case rendering consistently across output formats.
+
+`proofread()` flags the things that embarrass you in a delivered report: placeholders left unfilled, findings with no evidence attached, timestamps in mixed zones.
 
 ## Tests
 
 ```bash
-pip install -e '.[test]'
-pytest tests/             # tests/test_render.py
+pip install pytest
+pip install -e .
+pytest -q
 ```
-
-## Capabilities
-- [●] Markdown report
-- [●] Graphical HTML report — stat cards, bar charts, real tables (print-to-PDF)
-- [●] Activity overview aggregates (artifact types, top IPs, severity, CTI hits)
-- [●] Org template + branding + section toggles
-- [●] Flagged / pinned / MITRE / watchlist / detection / notes sections
-- [●] Markdown pipe-table rendering (notes / AI report)
-- [ ] Standalone CLI multi-format engine (PDF / STIX / MISP / JSON)
-- [ ] Scheduled auto-report on case close
-- [ ] Embedded timeline visualization
-
-**Done when:** standalone CLI renders all formats; scheduled-on-close works.
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE) — run, modify and self-host for any
-**noncommercial** purpose. Commercial use requires prior written authorization
-signed by the copyright holder. See [LICENSING.md](LICENSING.md).
+[PolyForm Noncommercial 1.0.0](LICENSE). Run, modify and self-host it for any noncommercial purpose. Commercial use needs written authorization from the copyright holder; see [LICENSING.md](LICENSING.md).
 
-## Part of the Citadel suite
-Scribe is the last stage of the pipeline: it renders what the rest of the suite
-produced. Runtime dependency (per `brick.yaml`): Elasticsearch (the caller
-gathers case data from it). Upstream: the case timeline/detections/findings,
-including [Pilot](https://github.com/sltcnb/pilot)'s AI investigation report.
-Platform: [citadel](https://github.com/sltcnb/citadel) · Contracts:
-[citadel-contracts](https://github.com/sltcnb/citadel-contracts).
+This is a source-available license, not an OSI-approved open source license.
+
+## Related
+
+[Citadel](https://github.com/sltcnb/citadel) · [Sigil](https://github.com/sltcnb/sigil) and [Anvil](https://github.com/sltcnb/anvil) produce the findings · [Pilot](https://github.com/sltcnb/pilot) writes the narrative · [citadel-contracts](https://github.com/sltcnb/citadel-contracts)
